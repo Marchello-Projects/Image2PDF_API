@@ -1,0 +1,63 @@
+import asyncio
+import os
+
+import dotenv
+from alembic import context
+from sqlalchemy import pool
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import create_async_engine
+
+dotenv.load_dotenv()
+
+DATABASE_NAME = os.getenv("DATABASE_NAME", "alembic_async_db")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+
+from configs.configdb import Base
+from database.models import ConversionTask, TaskLog
+
+target_metadata = Base.metadata
+
+DATABASE_URL = (
+    f"postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}"
+    f"@{DB_HOST}:{DB_PORT}/{DATABASE_NAME}"
+)
+
+
+def run_migrations_offline() -> None:
+    context.configure(
+        url=DATABASE_URL,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+    )
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def do_run_migrations(connection: Connection) -> None:
+    context.configure(connection=connection, target_metadata=target_metadata)
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+async def run_async_migrations() -> None:
+    connectable = create_async_engine(DATABASE_URL, poolclass=pool.NullPool)
+
+    async with connectable.connect() as connection:
+        await connection.run_sync(do_run_migrations)
+
+    await connectable.dispose()
+
+
+def run_migrations_online() -> None:
+    asyncio.run(run_async_migrations())
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
